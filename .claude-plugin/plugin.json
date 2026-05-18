@@ -1,0 +1,6 @@
+{
+  "name": "wip",
+  "version": "1.0.1",
+  "description": "Work-in-progress session handoff: auto-injects WIP.md on fresh start; captures task state on SessionEnd and PreCompact.",
+  "author": { "name": "Joel Thornton" }
+}
