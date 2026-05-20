@@ -1,16 +1,18 @@
 ---
 name: wip-write
-description: Write (or replace) WIP.md with an AI-synthesized session handoff covering current task state, blockers, recent commits, and concrete next actions. Use when ending a work session or before context gets lost.
+description: Manually trigger a WIP recap synthesis for the current session — same haiku-driven capture that PreCompact / SessionEnd run automatically. Use mid-session when you want a hard checkpoint.
 ---
 
-Write `./WIP.md` capturing exactly where we are. Gather: `git log --oneline -10`, `git status`, TODO.md, LEARNINGS.md if present.
+Run the capture hook in worker mode for the current session. The hook writes to `~/.claude/wip/<sanitized-cwd>/<session-id>.md`.
 
-Sections:
-1. **Status** — 1-2 sentence summary
-2. **Recent Commits** — last 6 with WHY each was needed
-3. **Active Tasks** — what was in-progress
-4. **Key Findings** — non-obvious discoveries this session
-5. **Blockers** — with evidence
-6. **Next Actions** — first 3 concrete next steps
+Prefer invoking `/wip:checkpoint` — its body handles script-path discovery and session-id fallback.
 
-Keep under 80 lines.
+If you must invoke directly, locate the worker script via this chain (first match wins): `$CLAUDE_PLUGIN_ROOT/hooks/wip_hook.py`, `~/.claude/plugins/marketplaces/joelpt-claude-plugins/plugins/wip/hooks/wip_hook.py`, `~/code/claude-plugin-wip/hooks/wip_hook.py`. Then:
+
+```bash
+python3 "<script>" worker --cwd "$(pwd)" --session-id "$CLAUDE_SESSION_ID" --event manual
+```
+
+If `$CLAUDE_SESSION_ID` isn't set, fall back to the newest `.md` file in `~/.claude/wip/-$(pwd | sed 's|/|-|g')/` (use its basename sans `.md`).
+
+After it returns, Read the written file and summarize what changed.
