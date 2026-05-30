@@ -1,6 +1,6 @@
 ---
 name: wip-write
-description: Manually trigger a WIP recap synthesis for the current session — same haiku-driven capture that PreCompact / SessionEnd run automatically. Use mid-session when you want a hard checkpoint.
+description: Checkpoint WIP recap now
 ---
 
 Run the capture hook in worker mode for the current session. The hook writes to `~/.claude/wip/<sanitized-cwd>/<session-id>.md`.

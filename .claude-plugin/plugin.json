@@ -1,6 +1,6 @@
 {
   "name": "wip",
-  "version": "2026.05.30.1",
+  "version": "2026.05.30.2",
   "description": "Session-rolling WIP recaps stored under ~/.claude/wip/. Haiku-synthesized capture on Stop / PreCompact / SessionEnd; auto-injects prior session(s) on SessionStart.",
   "author": { "name": "Joel Thornton" }
 }

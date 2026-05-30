@@ -1,6 +1,6 @@
 ---
 name: wip-read
-description: Load the most recent WIP recap for the current project from ~/.claude/wip/<sanitized-cwd>/. Use when SessionStart inject was skipped or you want to re-read context mid-session.
+description: Load recent WIP recap for project
 ---
 
 Locate the WIP dir: `~/.claude/wip/-<cwd-with-slashes-as-dashes>/` (e.g. cwd `/Users/joelthor/code/foo` → `~/.claude/wip/-Users-joelthor-code-foo/`).
