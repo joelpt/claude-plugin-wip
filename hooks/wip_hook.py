@@ -354,6 +354,10 @@ def _run_haiku_synthesis(prompt: str, timeout: float = 120.0) -> str:
     context can contaminate the output. Falls back to ``claude -p`` with
     ``--safe-mode`` and a stripped subprocess environment.
 
+    Note: the pcc path does not support ``--allowedTools`` restriction —
+    pcc exposes no equivalent flag. The claude -p fallback is strictly
+    narrower in tool access (Read-only).
+
     Args:
         prompt: Full synthesis prompt to send to haiku.
         timeout: Maximum seconds to wait for a response.
@@ -361,6 +365,16 @@ def _run_haiku_synthesis(prompt: str, timeout: float = 120.0) -> str:
     Returns:
         Stripped stdout from the model, or "" on any failure.
     """
+    # Strip session-identity env vars from both paths so a re-entrant
+    # claude/pcc subprocess cannot inherit the parent session's identity.
+    _SESSION_VARS = {
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDECODE",
+        "AI_AGENT",
+        "CODEX_COMPANION_SESSION_ID",
+    }
+    child_env = {k: v for k, v in os.environ.items() if k not in _SESSION_VARS}
     try:
         if shutil.which("pcc"):
             result = subprocess.run(
@@ -368,18 +382,9 @@ def _run_haiku_synthesis(prompt: str, timeout: float = 120.0) -> str:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                env=child_env,
             )
         else:
-            child_env = {
-                k: v for k, v in os.environ.items()
-                if k not in {
-                    "CLAUDE_CODE_SESSION_ID",
-                    "CLAUDE_CODE_CHILD_SESSION",
-                    "CLAUDECODE",
-                    "AI_AGENT",
-                    "CODEX_COMPANION_SESSION_ID",
-                }
-            }
             result = subprocess.run(
                 [
                     "claude", "-p", prompt,
