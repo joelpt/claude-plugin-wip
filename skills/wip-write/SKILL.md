@@ -10,9 +10,9 @@ Prefer invoking `/wip:checkpoint` — its body handles script-path discovery and
 If you must invoke directly, locate the worker script via this chain (first match wins): `$CLAUDE_PLUGIN_ROOT/hooks/wip_hook.py`, `~/.claude/plugins/marketplaces/joelpt-claude-plugins/plugins/wip/hooks/wip_hook.py`, `~/code/claude-plugin-wip/hooks/wip_hook.py`. Then:
 
 ```bash
-python3 "<script>" worker --cwd "$(pwd)" --session-id "$CLAUDE_SESSION_ID" --event manual
+python3 "<script>" worker --cwd "$(pwd)" --session-id "$CLAUDE_CODE_SESSION_ID" --event manual
 ```
 
-If `$CLAUDE_SESSION_ID` isn't set, fall back to the newest `.md` file in `~/.claude/wip/-$(pwd | sed 's|/|-|g')/` (use its basename sans `.md`).
+If `$CLAUDE_CODE_SESSION_ID` isn't set, fall back to the newest `.md` file in `~/.claude/wip/-$(pwd | sed 's|/|-|g')/` (use its basename sans `.md`).
 
 After it returns, Read the written file and summarize what changed.

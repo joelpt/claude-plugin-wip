@@ -13,7 +13,7 @@ Invoke the wip capture worker directly. This will spend a small amount of haiku 
 
    If none exist, tell the user the plugin install is broken and stop.
 
-2. **Determine the current session id.** Run `echo "$CLAUDE_SESSION_ID"`. If set, use it. Otherwise list `~/.claude/wip/-$(pwd | sed 's|/|-|g')/` by mtime and use the most recent `.md` basename as a fallback — and warn the user that a brand-new session with no prior capture won't yet have a file.
+2. **Determine the current session id.** Run `echo "$CLAUDE_CODE_SESSION_ID"`. If set, use it. Otherwise list `~/.claude/wip/-$(pwd | sed 's|/|-|g')/` by mtime and use the most recent `.md` basename as a fallback — and warn the user that a brand-new session with no prior capture won't yet have a file.
 
 3. **Run the worker synchronously:**
 
