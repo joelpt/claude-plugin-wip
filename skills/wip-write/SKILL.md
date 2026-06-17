@@ -3,16 +3,18 @@ name: wip-write
 description: Checkpoint WIP recap now
 ---
 
-Run the capture hook in worker mode for the current session. The hook writes to `~/.claude/wip/<sanitized-cwd>/<session-id>.md`.
+Prefer `/wip:checkpoint` — its body has pre-populated script path and session ID.
 
-Prefer invoking `/wip:checkpoint` — its body handles script-path discovery and session-id fallback.
+If invoking directly:
 
-If you must invoke directly, locate the worker script via this chain (first match wins): `$CLAUDE_PLUGIN_ROOT/hooks/wip_hook.py`, `~/.claude/plugins/marketplaces/joelpt-claude-plugins/plugins/wip/hooks/wip_hook.py`, `~/code/claude-plugin-wip/hooks/wip_hook.py`. Then:
+Worker: !`for f in "${CLAUDE_PLUGIN_ROOT}/hooks/wip_hook.py" ~/.claude/plugins/marketplaces/joelpt-claude-plugins/plugins/wip/hooks/wip_hook.py ~/code/claude-plugin-wip/hooks/wip_hook.py; do [ -f "$f" ] && echo "$f" && break; done`
+Session: !`echo "$CLAUDE_CODE_SESSION_ID"`
+WIP dir: !`echo ~/.claude/wip/-$(pwd | sed 's|^/||;s|/|-|g')`
+
+If Session is empty, run `ls -t <WIP dir>/ 2>/dev/null | head -1 | sed 's|\.md||'` for the fallback.
 
 ```bash
-python3 "<script>" worker --cwd "$(pwd)" --session-id "$CLAUDE_CODE_SESSION_ID" --event manual
+python3 <Worker> worker --cwd "$(pwd)" --session-id <Session> --event manual
 ```
 
-If `$CLAUDE_CODE_SESSION_ID` isn't set, fall back to the newest `.md` file in `~/.claude/wip/-$(pwd | sed 's|/|-|g')/` (use its basename sans `.md`).
-
-After it returns, Read the written file and summarize what changed.
+After it returns, Read `<WIP dir>/<Session>.md` and summarize what changed.

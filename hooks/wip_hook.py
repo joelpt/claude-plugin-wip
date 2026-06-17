@@ -378,20 +378,31 @@ def cmd_worker(args: argparse.Namespace) -> int:
         transcript_file=transcript_file,
     )
 
+    child_env = {
+        k: v for k, v in os.environ.items()
+        if k not in {
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDECODE",
+            "AI_AGENT",
+            "CODEX_COMPANION_SESSION_ID",
+        }
+    }
     try:
         result = subprocess.run(
             [
-                "claude", "-p",
+                "claude", "-p", prompt,
                 "--model", "haiku",
                 "--output-format", "text",
                 "--no-session-persistence",
+                "--safe-mode",
                 "--permission-mode", "bypassPermissions",
                 "--allowedTools", "Read",
-                prompt,
             ],
             capture_output=True,
             text=True,
             timeout=120,
+            env=child_env,
         )
         output = (result.stdout or "").strip()
     except (subprocess.TimeoutExpired, FileNotFoundError):
