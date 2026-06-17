@@ -354,9 +354,9 @@ def _run_haiku_synthesis(prompt: str, timeout: float = 120.0) -> str:
     context can contaminate the output. Falls back to ``claude -p`` with
     ``--safe-mode`` and a stripped subprocess environment.
 
-    Note: the pcc path does not support ``--allowedTools`` restriction —
-    pcc exposes no equivalent flag. The claude -p fallback is strictly
-    narrower in tool access (Read-only).
+    Both paths apply identical tool restriction (``--allowedTools Read``,
+    ``--safe-mode``, ``--permission-mode bypassPermissions``) so haiku
+    cannot run arbitrary commands even if the prompt is injected.
 
     Args:
         prompt: Full synthesis prompt to send to haiku.
@@ -378,7 +378,13 @@ def _run_haiku_synthesis(prompt: str, timeout: float = 120.0) -> str:
     try:
         if shutil.which("pcc"):
             result = subprocess.run(
-                ["pcc", "ask", "--model", "haiku", prompt],
+                [
+                    "pcc", "ask", "--model", "haiku",
+                    "--allowedTools", "Read",
+                    "--safe-mode",
+                    "--permission-mode", "bypassPermissions",
+                    prompt,
+                ],
                 capture_output=True,
                 text=True,
                 timeout=timeout,
