@@ -22,7 +22,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -224,36 +223,30 @@ def git_log(cwd: str) -> str:
 
 
 def tail_transcript(transcript_path: str, lines: int) -> str | None:
-    """Write the last N lines of a transcript file to a tempfile.
+    """Return the last N lines of a transcript file as a string.
 
-    The full transcript jsonl can be huge — feeding all of it to Haiku
-    is token-wasteful and slow. We tail it instead, then hand Haiku the
-    tempfile path to Read selectively.
+    The full transcript jsonl can be huge; we tail it to keep the
+    synthesis prompt manageable. Content is returned inline so haiku
+    needs no filesystem tool access.
 
     Args:
         transcript_path: Absolute path to a transcript jsonl, or "".
         lines: How many trailing lines to capture.
 
     Returns:
-        Path to the new tempfile, or None when the source is missing or
-        the tail command fails. Caller is responsible for unlinking.
+        The tailed content as a string, or None when the source is
+        missing or the tail command fails.
     """
     if not transcript_path or not Path(transcript_path).is_file():
         return None
     try:
-        out = subprocess.check_output(
+        return subprocess.check_output(
             ["tail", "-n", str(lines), transcript_path],
             text=True,
             timeout=10,
         )
     except Exception:
         return None
-    tf = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".jsonl", prefix="wip-tail-", delete=False
-    )
-    tf.write(out)
-    tf.close()
-    return tf.name
 
 
 def extract_started(existing: str) -> str:
@@ -278,7 +271,7 @@ def build_prompt(
     event: str,
     existing: str,
     git_log_text: str,
-    transcript_file: str | None,
+    transcript_content: str | None,
 ) -> str:
     """Build the haiku synthesis prompt for one capture.
 
@@ -295,20 +288,20 @@ def build_prompt(
             `SessionEnd`/`manual`).
         existing: Prior WIP file content (may be empty).
         git_log_text: Output of recent `git log --oneline`.
-        transcript_file: Path to a tailed-transcript tempfile, or None
-            when transcript is unavailable.
+        transcript_content: Tailed transcript jsonl as a string, or None
+            when the transcript is unavailable.
 
     Returns:
-        The complete prompt string to pass to `claude -p`.
+        The complete prompt string to pass to the synthesis model.
     """
     project_name = Path(cwd).name
     short_id = session_id[:8]
     started = extract_started(existing)
     transcript_block = (
-        f"3. **Conversation transcript tail** (jsonl, ~{TRANSCRIPT_TAIL_LINES} most recent lines):\n"
-        f"   `{transcript_file}` — use the Read tool on this path. Scan for: commits made, "
-        f"files edited, tests added, blockers mentioned, planned next steps."
-        if transcript_file
+        f"3. **Conversation transcript tail** (~{TRANSCRIPT_TAIL_LINES} most recent lines of jsonl):\n"
+        f"```\n{transcript_content}\n```\n"
+        f"   Scan for: commits made, files edited, tests added, blockers mentioned, planned next steps."
+        if transcript_content
         else "3. **Conversation transcript**: (not available for this run — work from inputs 1 + 2 only)"
     )
     existing_block = existing.strip() or "(no prior WIP file — first capture this session)"
@@ -354,9 +347,9 @@ def _run_haiku_synthesis(prompt: str, timeout: float = 120.0) -> str:
     context can contaminate the output. Falls back to ``claude -p`` with
     ``--safe-mode`` and a stripped subprocess environment.
 
-    Both paths apply identical tool restriction (``--allowedTools Read``,
-    ``--safe-mode``, ``--permission-mode bypassPermissions``) so haiku
-    cannot run arbitrary commands even if the prompt is injected.
+    Both paths use ``--safe-mode`` (suppresses hooks/plugins) and text-only
+    completion — no tool flags, no permission bypass — so haiku has no
+    filesystem access and cannot act on prompt-injected instructions.
 
     Args:
         prompt: Full synthesis prompt to send to haiku.
@@ -378,13 +371,7 @@ def _run_haiku_synthesis(prompt: str, timeout: float = 120.0) -> str:
     try:
         if shutil.which("pcc"):
             result = subprocess.run(
-                [
-                    "pcc", "ask", "--model", "haiku",
-                    "--allowedTools", "Read",
-                    "--safe-mode",
-                    "--permission-mode", "bypassPermissions",
-                    prompt,
-                ],
+                ["pcc", "ask", "--model", "haiku", "--safe-mode", prompt],
                 capture_output=True,
                 text=True,
                 timeout=timeout,
@@ -398,8 +385,6 @@ def _run_haiku_synthesis(prompt: str, timeout: float = 120.0) -> str:
                     "--output-format", "text",
                     "--no-session-persistence",
                     "--safe-mode",
-                    "--permission-mode", "bypassPermissions",
-                    "--allowedTools", "Read",
                 ],
                 capture_output=True,
                 text=True,
@@ -433,7 +418,7 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
     existing = wip_file.read_text() if wip_file.exists() else ""
     log_text = git_log(args.cwd)
-    transcript_file = tail_transcript(args.transcript, TRANSCRIPT_TAIL_LINES)
+    transcript_content = tail_transcript(args.transcript, TRANSCRIPT_TAIL_LINES)
 
     prompt = build_prompt(
         session_id=args.session_id,
@@ -441,15 +426,10 @@ def cmd_worker(args: argparse.Namespace) -> int:
         event=args.event,
         existing=existing,
         git_log_text=log_text,
-        transcript_file=transcript_file,
+        transcript_content=transcript_content,
     )
 
-    try:
-        output = _run_haiku_synthesis(prompt)
-    finally:
-        if transcript_file:
-            with contextlib.suppress(OSError):
-                Path(transcript_file).unlink()
+    output = _run_haiku_synthesis(prompt)
 
     if not output:
         if not wip_file.exists():
