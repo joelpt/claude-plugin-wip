@@ -19,6 +19,7 @@ import argparse
 import contextlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -345,6 +346,60 @@ def build_prompt(
     )
 
 
+def _run_haiku_synthesis(prompt: str, timeout: float = 120.0) -> str:
+    """Invoke haiku for WIP synthesis, preferring pcc when installed.
+
+    Uses ``pcc ask`` when available: it runs in an isolated Claude Code
+    config with CLAUDE.md suppressed, so no hooks, plugins, or session
+    context can contaminate the output. Falls back to ``claude -p`` with
+    ``--safe-mode`` and a stripped subprocess environment.
+
+    Args:
+        prompt: Full synthesis prompt to send to haiku.
+        timeout: Maximum seconds to wait for a response.
+
+    Returns:
+        Stripped stdout from the model, or "" on any failure.
+    """
+    try:
+        if shutil.which("pcc"):
+            result = subprocess.run(
+                ["pcc", "ask", "--model", "haiku", prompt],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        else:
+            child_env = {
+                k: v for k, v in os.environ.items()
+                if k not in {
+                    "CLAUDE_CODE_SESSION_ID",
+                    "CLAUDE_CODE_CHILD_SESSION",
+                    "CLAUDECODE",
+                    "AI_AGENT",
+                    "CODEX_COMPANION_SESSION_ID",
+                }
+            }
+            result = subprocess.run(
+                [
+                    "claude", "-p", prompt,
+                    "--model", "haiku",
+                    "--output-format", "text",
+                    "--no-session-persistence",
+                    "--safe-mode",
+                    "--permission-mode", "bypassPermissions",
+                    "--allowedTools", "Read",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=child_env,
+            )
+        return (result.stdout or "").strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return ""
+
+
 def cmd_worker(args: argparse.Namespace) -> int:
     """Run the actual haiku synthesis and write the WIP file.
 
@@ -378,35 +433,8 @@ def cmd_worker(args: argparse.Namespace) -> int:
         transcript_file=transcript_file,
     )
 
-    child_env = {
-        k: v for k, v in os.environ.items()
-        if k not in {
-            "CLAUDE_CODE_SESSION_ID",
-            "CLAUDE_CODE_CHILD_SESSION",
-            "CLAUDECODE",
-            "AI_AGENT",
-            "CODEX_COMPANION_SESSION_ID",
-        }
-    }
     try:
-        result = subprocess.run(
-            [
-                "claude", "-p", prompt,
-                "--model", "haiku",
-                "--output-format", "text",
-                "--no-session-persistence",
-                "--safe-mode",
-                "--permission-mode", "bypassPermissions",
-                "--allowedTools", "Read",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            env=child_env,
-        )
-        output = (result.stdout or "").strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        output = ""
+        output = _run_haiku_synthesis(prompt)
     finally:
         if transcript_file:
             with contextlib.suppress(OSError):
